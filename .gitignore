@@ -127,3 +127,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+*.zip
+*.pptx
+lab5_dataset/**
+*.pth
