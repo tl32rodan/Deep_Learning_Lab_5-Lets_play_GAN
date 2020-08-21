@@ -34,7 +34,7 @@ e.g. [[1,1,0,...,0],[0,1,1,0,...],...]
 class evaluation_model():
     def __init__(self):
         #modify the path to your own path
-        checkpoint = torch.load('logs/classifier/checkpoint.pth')
+        checkpoint = torch.load('../classifier_weight.pth')
         self.resnet18 = models.resnet18(pretrained=False)
         self.resnet18.fc = nn.Sequential(
             nn.Linear(512,24),
@@ -47,7 +47,7 @@ class evaluation_model():
     def compute_acc(self, out, onehot_labels):
         batch_size = out.size(0)
         acc = 0
-        total = 0
+        total = 0.0
         for i in range(batch_size):
             k = int(onehot_labels[i].sum().item())
             total += k
@@ -57,6 +57,7 @@ class evaluation_model():
                 if j in li:
                     acc += 1
         return acc / total
+    
     def eval(self, images, labels):
         with torch.no_grad():
             #your image shape should be (batch, 3, 64, 64)
