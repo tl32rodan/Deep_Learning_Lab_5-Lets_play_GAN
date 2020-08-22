@@ -131,3 +131,4 @@ dmypy.json
 *.pptx
 lab5_dataset/**
 *.pth
+source_code/models

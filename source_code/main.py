@@ -30,7 +30,18 @@ torch.manual_seed(manualSeed)
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-# +
+# Checkpoint path
+ckp_path_G = './models/netG/'
+ckp_path_D = './models/netD/'
+time_stamp = '0822_2340'
+
+# Print & store settings
+print_every = 50
+store_every = 500
+# # +
+# Number of training epochs
+num_epochs = 3000
+
 # Root directory for dataset
 dataroot = '../lab5_dataset/iclevr/'
 
@@ -59,9 +70,6 @@ ngf = 64
 
 # Size of feature maps in discriminator
 ndf = 64
-
-# Number of training epochs
-num_epochs = 100
 
 # Learning rate for optimizers
 lr = 0.0002
@@ -234,14 +242,6 @@ def test(netG, test_loader):
 # +
 # Training Loop
 
-# Checkpoint path
-ckp_path_G = './models/netG/'
-ckp_path_D = './models/netD/'
-time_stamp = '0821_1630'
-
-# Print & store settings
-print_every = 50
-store_every = 500
 
 # +
 
@@ -249,7 +249,7 @@ store_every = 500
 img_list = []
 G_losses = []
 D_losses = []
-iters = 0
+iters = 1
 avg_acc = 0.
 
 
@@ -316,13 +316,13 @@ for epoch in range(num_epochs):
         # Store if the performance is good
         acc = test(netG, test_loader)
         if acc >= 0.7 :
-            torch.store(netG, os.path.join(ckp_path_G, 'iter_'+str(i)+'_'+time_stamp))
-            torch.store(netD, os.path.join(ckp_path_D, 'iter_'+str(i)+'_'+time_stamp))
+            torch.save(netG, os.path.join(ckp_path_G, 'iter_'+str(i)+'_'+time_stamp+"_good"))
+            torch.save(netD, os.path.join(ckp_path_D, 'iter_'+str(i)+'_'+time_stamp+"_good"))
             print('Store model! Acc = ',acc)
             
 
         # Output training stats
-        if i % print_every == 0:
+        if i % print_every == 0 or i == (len(dataloader)-1):
             print('[%d/%d][%d/%d]\tLoss_D: %.4f\tLoss_G: %.4f\tD(x): %.4f\tD(G(z)): %.4f / %.4f'
                   % (epoch, num_epochs, i, len(dataloader),
                      errD.item(), errG.item(), D_x, D_G_z1, D_G_z2))
@@ -343,9 +343,13 @@ for epoch in range(num_epochs):
                     fake = netG(fixed_noise,cond.detach()).detach().cpu()
                     break
             img_list.append(vutils.make_grid(fake, padding=2, normalize=True))
+            
+            if (iters % (store_every*10) == 0):
+            
+                torch.save(netG, os.path.join(ckp_path_G, 'iter_'+str(iter)+'_'+time_stamp))
+                torch.save(netD, os.path.join(ckp_path_D, 'iter_'+str(iter)+'_'+time_stamp))
 
         iters += 1
-    break
 # -
 
 plt.figure(figsize=(10,5))
