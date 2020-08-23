@@ -315,7 +315,11 @@ for epoch in range(num_epochs):
         
         # Store if the performance is good
         acc = test(netG, test_loader)
-        if acc >= 0.7 :
+        if acc >= 0.8 :
+            torch.save(netG, os.path.join(ckp_path_G, 'iter_'+str(i)+'_'+time_stamp+"_great"))
+            torch.save(netD, os.path.join(ckp_path_D, 'iter_'+str(i)+'_'+time_stamp+"_great"))
+            print('Store model! Acc = ',acc)
+        elif acc >= 0.7:
             torch.save(netG, os.path.join(ckp_path_G, 'iter_'+str(i)+'_'+time_stamp+"_good"))
             torch.save(netD, os.path.join(ckp_path_D, 'iter_'+str(i)+'_'+time_stamp+"_good"))
             print('Store model! Acc = ',acc)
