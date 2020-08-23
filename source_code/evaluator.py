@@ -64,3 +64,21 @@ class evaluation_model():
             out = self.resnet18(images)
             acc = self.compute_acc(out.cpu(), labels.cpu())
             return acc
+
+
+def test(netG, test_loader):
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    
+    eval_model = evaluation_model()
+    
+    avg_acc = 0.
+    n = 0
+    with torch.no_grad():
+        for cond in test_loader:
+            fixed_noise = torch.randn(len(cond), nz, 1, 1, device=device)
+            fake = netG(fixed_noise,cond.to(device))
+            acc = eval_model.eval(images=fake.to(device), labels=cond.to(device))
+            avg_acc += acc*len(cond)
+            n += len(cond)
+    avg_acc = avg_acc/n
+    return avg_acc
