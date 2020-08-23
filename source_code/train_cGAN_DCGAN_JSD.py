@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from IPython.display import HTML
 
-import DCGAN
+import DCGAN_cGAN
 from dataloader import ICLEVRLoader
 from evaluator import evaluation_model, test
 
@@ -35,7 +35,7 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 # Checkpoint path
 ckp_path_G = './models/cGAN_DCGAN_JSD/netG/'
 ckp_path_D = './models/cGAN_DCGAN_JSD/netD/'
-time_stamp = '0823_1910'
+time_stamp = '0823_1958'
 
 # Print & store settings
 print_every = 50
@@ -66,12 +66,12 @@ nc = 3
 
 # Size of z latent vector (i.e. size of generator input)
 # Plus classes number for cGAN
-nz = 512
+nz = 100
 
 # Size of feature maps in generator
-ngf = 128
+ngf = 64
 # Size of feature maps in discriminator
-ndf = 128
+ndf = 64
 # -
 
 # Learning rate for optimizers
@@ -108,7 +108,7 @@ test_loader = torch.utils.data.DataLoader(dataset=test_set,batch_size=test_size)
 
 # +
 
-netG = DCGAN.Generator(ngpu, nc=nc, nz=nz, ngf=ngf).to(device)
+netG = DCGAN_cGAN.Generator(ngpu, nc=nc, nz=nz, ngf=ngf).to(device)
 
 # Handle multi-gpu if desired
 if (device.type == 'cuda') and (ngpu > 1):
@@ -126,7 +126,7 @@ netG.apply(weights_init)
 
 # +
 
-netD = DCGAN.Discriminator(ngpu, nc=nc, nz=nz, ndf=ndf).to(device)
+netD = DCGAN_cGAN.Discriminator(ngpu, nc=nc, nz=nz, ndf=ndf).to(device)
 
 # Handle multi-gpu if desired
 if (device.type == 'cuda') and (ngpu > 1):
