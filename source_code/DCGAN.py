@@ -72,7 +72,7 @@ class Discriminator(nn.Module):
         super(Discriminator, self).__init__()
         self.ngpu = ngpu
         self.nz = nz
-        self.ngf = ndf
+        self.ndf = ndf
         self.nc = nc
         self.num_conds = num_conds
         

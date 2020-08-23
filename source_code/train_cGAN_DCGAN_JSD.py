@@ -33,9 +33,9 @@ torch.manual_seed(manualSeed)
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 # Checkpoint path
-ckp_path_G = './models/netG/'
-ckp_path_D = './models/netD/'
-time_stamp = '0823_1210'
+ckp_path_G = './models/cGAN_DCGAN_JSD/netG/'
+ckp_path_D = './models/cGAN_DCGAN_JSD/netD/'
+time_stamp = '0823_1910'
 
 # Print & store settings
 print_every = 50
@@ -224,7 +224,7 @@ for epoch in range(num_epochs):
         optimizerG.step()
         
         # Store if the performance is good
-        acc = test(netG, test_loader)
+        acc = test(netG, test_loader, nz=nz)
         if acc >= 0.8 :
             torch.save(netG, os.path.join(ckp_path_G, 'iter_'+str(i)+'_'+time_stamp+"_great"))
             torch.save(netD, os.path.join(ckp_path_D, 'iter_'+str(i)+'_'+time_stamp+"_great"))

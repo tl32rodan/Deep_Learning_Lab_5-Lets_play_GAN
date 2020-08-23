@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from IPython.display import HTML
 
-import DCGAN
+import PGAN
 from dataloader import ICLEVRLoader
 from evaluator import evaluation_model, test
 
@@ -87,18 +87,6 @@ ngpu = 1
 # Size of test set
 test_size = 32
 
-
-# custom weights initialization called on netG and netD
-def weights_init(m):
-    classname = m.__class__.__name__
-    if classname.find('Conv') != -1:
-        nn.init.normal_(m.weight.data, 0.0, 0.02)
-    elif classname.find('BatchNorm') != -1:
-        nn.init.normal_(m.weight.data, 1.0, 0.02)
-        nn.init.constant_(m.bias.data, 0)
-
-
-
 train_set = ICLEVRLoader(root=dataroot, mode='train')
 dataloader = torch.utils.data.DataLoader(dataset=train_set,batch_size=batch_size,
                                          shuffle=True, num_workers=workers)
@@ -108,16 +96,11 @@ test_loader = torch.utils.data.DataLoader(dataset=test_set,batch_size=test_size)
 # ### Create the generator
 
 # +
-
-netG = DCGAN.Generator(ngpu, nc=nc, nz=nz, ngf=ngf).to(device)
+netG = PGAN.GNet(dimLatent=nz, depthScale0=ngf).to(device)
 
 # Handle multi-gpu if desired
 if (device.type == 'cuda') and (ngpu > 1):
     netG = nn.DataParallel(netG, list(range(ngpu)))
-
-# Apply the weights_init function to randomly initialize all weights
-#  to mean=0, stdev=0.2.
-netG.apply(weights_init)
 
 # Print the model
 #print(netG)
@@ -127,16 +110,12 @@ netG.apply(weights_init)
 
 # +
 
-netD = DCGAN.Discriminator(ngpu, nc=nc, nz=nz, ndf=ndf).to(device)
+netD = PGAN.DNet(depthScale0=ndf).to(device)
 
 # Handle multi-gpu if desired
 if (device.type == 'cuda') and (ngpu > 1):
     netD = nn.DataParallel(netD, list(range(ngpu)))
-
-# Apply the weights_init function to randomly initialize all weights
-#  to mean=0, stdev=0.2.
-netD.apply(weights_init)
-
+    
 # Print the model
 #print(netD)
 

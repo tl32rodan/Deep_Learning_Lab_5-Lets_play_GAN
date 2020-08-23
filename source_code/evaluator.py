@@ -66,7 +66,7 @@ class evaluation_model():
             return acc
 
 
-def test(netG, test_loader):
+def test(netG, test_loader, nz=100):
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     
     eval_model = evaluation_model()
