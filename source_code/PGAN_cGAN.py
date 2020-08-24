@@ -148,7 +148,8 @@ class GNet(nn.Module):
                  normalization=True,
                  generationActivation=None,
                  dimOutput=3,
-                 equalizedlR=True):
+                 equalizedlR=True,
+                 num_conds = 24):
         r"""
         Build a generator for a progressive GAN model
         Args:
@@ -181,6 +182,8 @@ class GNet(nn.Module):
         self.initFormatLayer(dimLatent)
         self.dimOutput = dimOutput
         self.groupScale0 = nn.ModuleList()
+        
+        
         self.groupScale0.append(EqualizedConv2d(depthScale0, depthScale0, 3,
                                                 equalized=equalizedlR,
                                                 initBiasToZero=initBiasToZero,
@@ -189,6 +192,8 @@ class GNet(nn.Module):
         self.toRGBLayers.append(EqualizedConv2d(depthScale0, self.dimOutput, 1,
                                                 equalized=equalizedlR,
                                                 initBiasToZero=initBiasToZero))
+        
+        self.num_conds = num_conds
 
         # Initalize the upscaling parameters
         # alpha : when a new scale is added to the network, the previous
@@ -244,12 +249,12 @@ class GNet(nn.Module):
 
         self.scaleLayers[-1].append(EqualizedConv2d(depthLastScale,
                                                     depthNewScale,
-                                                    3,
+                                                    3+1,
                                                     padding=1,
                                                     equalized=self.equalizedlR,
                                                     initBiasToZero=self.initBiasToZero))
         self.scaleLayers[-1].append(EqualizedConv2d(depthNewScale, depthNewScale,
-                                                    3, padding=1,
+                                                    3+1, padding=1,
                                                     equalized=self.equalizedlR,
                                                     initBiasToZero=self.initBiasToZero))
 
@@ -275,17 +280,23 @@ class GNet(nn.Module):
 
         self.alpha = alpha
 
-    def forward(self, x):
-
+    def forward(self, x, cond):
+        
         ## Normalize the input ?
         if self.normalizationLayer is not None:
             x = self.normalizationLayer(x)
-        x = x.view(-1, num_flat_features(x))
+        x = x.view(-1, num_flat_features(x))        
+        
+        # Concatanate x with condition
+        cond = cond.view(-1, self.num_conds,1,1)
+        x = torch.cat((x, cond),1)
+        
         # format layer
         x = self.leakyRelu(self.formatLayer(x))
         x = x.view(x.size()[0], -1, 4, 4)
 
         x = self.normalizationLayer(x)
+
 
         # Scale 0 (no upsampling)
         for convLayer in self.groupScale0:
@@ -332,8 +343,9 @@ class DNet(nn.Module):
                  leakyReluLeak=0.2,
                  sizeDecisionLayer=1,
                  miniBatchNormalization=False,
-                 dimInput=3,
-                 equalizedlR=True):
+                 dimInput=3+1,
+                 equalizedlR=True,
+                 num_conds=24):
         r"""
         Build a discriminator for a progressive GAN model
         Args:
@@ -359,6 +371,7 @@ class DNet(nn.Module):
         self.initBiasToZero = initBiasToZero
         self.equalizedlR = equalizedlR
         self.dimInput = dimInput
+        self.num_conds = num_conds
 
         # Initalize the scales
         self.scalesDepth = [depthScale0]
@@ -366,6 +379,12 @@ class DNet(nn.Module):
         self.fromRGBLayers = nn.ModuleList()
 
         self.mergeLayers = nn.ModuleList()
+        
+        # Reshape condition to a channel of image
+        self.extend_cond = nn.Sequential(
+            nn.Linear(self.num_conds, 64*64, bias=False),
+            nn.ReLU()
+        )
 
         # Initialize the last layer
         self.initDecisionLayer(sizeDecisionLayer)
@@ -387,7 +406,7 @@ class DNet(nn.Module):
                                                    equalized=equalizedlR,
                                                    initBiasToZero=initBiasToZero))
 
-        self.groupScaleZero.append(EqualizedLinear(depthScale0 * 16,
+        self.groupScaleZero.append(EqualizedLinear(depthScale0**3,
                                                    depthScale0,
                                                    equalized=equalizedlR,
                                                    initBiasToZero=initBiasToZero))
@@ -397,6 +416,7 @@ class DNet(nn.Module):
 
         # Leaky relu activation
         self.leakyRelu = torch.nn.LeakyReLU(leakyReluLeak)
+        
 
     def addScale(self, depthNewScale):
 
@@ -449,7 +469,9 @@ class DNet(nn.Module):
 
 
 
-    def forward(self, x, getFeature = False):
+    def forward(self, x, cond, getFeature = False):
+        cond = self.extend_cond(cond).view(-1,1,64,64)
+        x = torch.cat((x,cond),1)
 
         # Alpha blending
         if self.alpha > 0 and len(self.fromRGBLayers) > 1:
@@ -479,8 +501,9 @@ class DNet(nn.Module):
         # Now the scale 0
 
         x = self.leakyRelu(self.groupScaleZero[0](x))
-
+        print('x.shape=',x.shape)
         x = x.view(-1, num_flat_features(x))
+        print('x.shape=',x.shape)
         x = self.leakyRelu(self.groupScaleZero[1](x))
 
         out = self.decisionLayer(x)

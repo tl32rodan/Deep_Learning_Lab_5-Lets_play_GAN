@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from IPython.display import HTML
 
-import PGAN
+import PGAN_cGAN
 from dataloader import ICLEVRLoader
 from evaluator import evaluation_model, test
 
@@ -33,13 +33,13 @@ torch.manual_seed(manualSeed)
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 # Checkpoint path
-ckp_path_G = './models/netG/'
-ckp_path_D = './models/netD/'
-time_stamp = '0823_1210'
+ckp_path_G = './models/cGAN_PGAN_JSD/netG/'
+ckp_path_D = './models/cGAN_PGAN_JSD/netD/'
+time_stamp = '0824_1135'
 
 # Print & store settings
 print_every = 50
-store_every = 300
+store_every = 10
 # # +
 # Number of training epochs
 num_epochs = 300
@@ -96,7 +96,7 @@ test_loader = torch.utils.data.DataLoader(dataset=test_set,batch_size=test_size)
 # ### Create the generator
 
 # +
-netG = PGAN.GNet(dimLatent=nz, depthScale0=ngf).to(device)
+netG = PGAN_cGAN.GNet(dimLatent=nz, depthScale0=ngf).to(device)
 
 # Handle multi-gpu if desired
 if (device.type == 'cuda') and (ngpu > 1):
@@ -110,7 +110,7 @@ if (device.type == 'cuda') and (ngpu > 1):
 
 # +
 
-netD = PGAN.DNet(depthScale0=ndf).to(device)
+netD = PGAN_cGAN.DNet(depthScale0=ndf).to(device)
 
 # Handle multi-gpu if desired
 if (device.type == 'cuda') and (ngpu > 1):
@@ -238,7 +238,7 @@ for epoch in range(num_epochs):
                     break
             img_list.append(vutils.make_grid(fake, padding=2, normalize=True))
             
-            if (iters % (store_every*10) == 0):
+            if (epoch == num_epochs-1) and (i == len(dataloader)-1):
             
                 torch.save(netG, os.path.join(ckp_path_G, 'iter_'+str(iter)+'_'+time_stamp))
                 torch.save(netD, os.path.join(ckp_path_D, 'iter_'+str(iter)+'_'+time_stamp))
@@ -253,5 +253,5 @@ plt.plot(D_losses,label="D")
 plt.xlabel("iterations")
 plt.ylabel("Loss")
 plt.legend()
-plt.show()
+plt.savefig(time_stamp)
 

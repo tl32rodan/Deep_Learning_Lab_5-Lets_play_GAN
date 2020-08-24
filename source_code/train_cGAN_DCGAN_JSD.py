@@ -35,7 +35,7 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 # Checkpoint path
 ckp_path_G = './models/cGAN_DCGAN_JSD/netG/'
 ckp_path_D = './models/cGAN_DCGAN_JSD/netD/'
-time_stamp = '0824_1122'
+time_stamp = '0824_1123'
 
 # Print & store settings
 print_every = 50
