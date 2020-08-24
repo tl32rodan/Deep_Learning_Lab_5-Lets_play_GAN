@@ -13,6 +13,8 @@ import torch.optim as optim
 import torchvision.datasets as dset
 import torchvision.transforms as transforms
 import torchvision.utils as vutils
+from torch import autograd
+from torch.autograd import Variable
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
@@ -33,16 +35,16 @@ torch.manual_seed(manualSeed)
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 # Checkpoint path
-ckp_path_G = './models/cGAN_DCGAN_JSD/netG/'
-ckp_path_D = './models/cGAN_DCGAN_JSD/netD/'
-time_stamp = '0824_1226'
+ckp_path_G = './models/cGAN_DCGAN_WGANGP/netG/'
+ckp_path_D = './models/cGAN_DCGAN_WGANGP/netD/'
+time_stamp = '0824_1420'
 
 # Print & store settings
-print_every = 50
+print_every = 100
 store_every = 10
 # # +
 # Number of training epochs
-num_epochs = 300
+num_epochs = 10000
 
 # Root directory for dataset
 dataroot = '../lab5_dataset/iclevr/'
@@ -82,6 +84,12 @@ beta1 = 0.5
 
 # Number of GPUs available. Use 0 for CPU mode.
 ngpu = 1
+
+# For WGAN and WGAN-GP, number of critic iters per gen iter
+CRITIC_ITERS = 5 
+
+# Gradient penalty lambda hyperparameter
+LAMBDA = 10 
 
 # Size of test set
 test_size = 32
@@ -138,14 +146,44 @@ netD.apply(weights_init)
 
 # Print the model
 #print(netD)
+# -
+
+def inf_img(dataloader):
+    i = 0
+    while True:
+        for data in dataloader:
+            i+=1
+            yield i, data
+
+
+def calc_gradient_penalty(netD, real_data, fake_data, cond):
+    alpha = torch.rand(real_data.size(0), 1, 1, 1)
+    alpha = alpha.expand_as(real_data)
+    alpha = alpha.to(device)
+
+    interpolates = alpha * real_data + ((1 - alpha) * fake_data)
+
+    interpolates = Variable(interpolates, requires_grad=True).to(device)
+
+    disc_interpolates = netD(interpolates, cond)
+
+    gradients = autograd.grad(outputs=disc_interpolates, inputs=interpolates,
+                              grad_outputs=torch.ones_like(disc_interpolates).to(device),
+                              create_graph=True,
+                              retain_graph=True,
+                              only_inputs=True,
+                             )[0]
+    
+    gradients_norm = torch.sqrt(torch.sum(gradients ** 2, dim=1) + 1e-12)
+    gradient_penalty = ((gradients_norm - 1) ** 2).mean() * LAMBDA
+    return gradient_penalty
+
 
 # +
+inf_loader = inf_img(dataloader)
 # Initialize BCELoss function
-criterion = nn.BCELoss()
-
-# Establish convention for real and fake labels during training
-real_label = 1.
-fake_label = 0.
+one = one = torch.tensor(1, dtype=torch.float).to(device)
+mone = one * -1
 
 # Setup Adam optimizers for both G and D
 optimizerD = optim.Adam(netD.parameters(), lr=lr, betas=(beta1, 0.999))
@@ -168,103 +206,113 @@ print("Starting Training Loop...")
 # For each epoch
 for epoch in range(num_epochs):
     # For each batch in the dataloader
-    for i, data in enumerate(dataloader, 0):
+    for p in netD.parameters():  # reset requires_grad
+        p.requires_grad = True  # they are set to False below in netG update
+    for iter_crtic in range(CRITIC_ITERS):
+        # Get next data
+        i, data = next(inf_loader)
+        
         # Conditions of data
         cond = data[1].to(device)
         ############################
-        # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
+        # (1) Update D network
         ###########################
         ## Train with all-real batch
         netD.zero_grad()
         
         # Format batch
-        real_cpu = data[0].to(device)
-        b_size = real_cpu.size(0)
-        label = torch.full((b_size,), real_label, dtype=torch.float, device=device)
+        real = Variable(data[0]).to(device)
+        b_size = real.size(0)
         # Forward pass real batch with condition through D
-        output = netD(real_cpu,cond.detach()).view(-1)
-        
-        # Calculate loss on all-real batch
-        errD_real = criterion(output, label)
+        D_real = netD(real,cond.detach())
+        D_real = D_real.mean()
         # Calculate gradients for D in backward pass
-        errD_real.backward()
-        D_x = output.mean().item()
+        D_real.backward(mone)
+        
 
         ## Train with all-fake batch
         # Generate batch of latent vectors
         noise = torch.randn(b_size, nz, 1, 1, device=device)
+        noise = Variable(noise)
         # Generate fake image batch with G
         fake = netG(noise,cond.detach())
-        label.fill_(fake_label)
         
         # Classify all fake batch with D
-        output = netD(fake.detach(),cond.detach()).view(-1)
+        D_fake = netD(fake,cond.detach()).view(-1)
         # Calculate D's loss on the all-fake batch
-        errD_fake = criterion(output, label)
+        D_fake = D_fake.mean()
         # Calculate the gradients for this batch
-        errD_fake.backward()
-        D_G_z1 = output.mean().item()
+        D_fake.backward(one)
+        
+        
+        # train with gradient penalty
+        gradient_penalty = calc_gradient_penalty(netD, real.data, fake.data, cond)
+        gradient_penalty.backward()
+        
         # Add the gradients from the all-real and all-fake batches
-        errD = errD_real + errD_fake
+        D_cost = D_fake - D_real + gradient_penalty
+        Wasserstein_D = D_real - D_fake
+
         # Update D
         optimizerD.step()
 
-        ############################
-        # (2) Update G network: maximize log(D(G(z)))
-        ###########################
-        netG.zero_grad()
-        label.fill_(real_label)  # fake labels are real for generator cost
-        # Since we just updated D, perform another forward pass of all-fake batch through D
-        output = netD(fake,cond.detach()).view(-1)
-        # Calculate G's loss based on this output
-        errG = criterion(output, label)
-        # Calculate gradients for G
-        errG.backward()
-        D_G_z2 = output.mean().item()
-        # Update G
-        optimizerG.step()
+    ############################
+    # (2) Update G network: maximize log(D(G(z)))
+    ###########################
+    for p in netD.parameters(): 
+        p.requires_grad = False # to avoid computation
+    netG.zero_grad()
+    # Since we just updated D, perform another forward pass of all-fake batch through D
+    noise = torch.randn(b_size, nz, 1, 1, device=device)
+    # Generate fake image batch with G
+    fake = netG(noise,cond.detach())
+    output = netD(fake,cond.detach()).view(-1)
+    output = output.mean()
+    output.backward(mone)
         
-        # Store if the performance is good
-        acc = test(netG, test_loader, nz=nz)
-        if acc >= 0.8 :
-            torch.save(netG, os.path.join(ckp_path_G, 'iter_'+str(i)+'_'+time_stamp+"_great"))
-            torch.save(netD, os.path.join(ckp_path_D, 'iter_'+str(i)+'_'+time_stamp+"_great"))
-            print('Store model! Acc = ',acc)
-        elif acc >= 0.7:
-            torch.save(netG, os.path.join(ckp_path_G, 'iter_'+str(i)+'_'+time_stamp+"_good"))
-            torch.save(netD, os.path.join(ckp_path_D, 'iter_'+str(i)+'_'+time_stamp+"_good"))
-            print('Store model! Acc = ',acc)
+    G_cost = -output
+    optimizerG.step()
+
+    # Store if the performance is good
+    acc = test(netG, test_loader, nz=nz)
+    if acc >= 0.8 :
+        torch.save(netG, os.path.join(ckp_path_G, 'iter_'+str(epoch)+'_'+time_stamp+"_great"))
+        torch.save(netD, os.path.join(ckp_path_D, 'iter_'+str(epoch)+'_'+time_stamp+"_great"))
+        print('Store model! Acc = ',acc)
+    elif acc >= 0.7:
+        torch.save(netG, os.path.join(ckp_path_G, 'iter_'+str(epoch)+'_'+time_stamp+"_good"))
+        torch.save(netD, os.path.join(ckp_path_D, 'iter_'+str(epoch)+'_'+time_stamp+"_good"))
+        print('Store model! Acc = ',acc)
             
 
-        # Output training stats
-        if i % print_every == 0 or i == (len(dataloader)-1):
-            print('[%d/%d][%d/%d]\tLoss_D: %.4f\tLoss_G: %.4f\tD(x): %.4f\tD(G(z)): %.4f / %.4f'
-                  % (epoch, num_epochs, i, len(dataloader),
-                     errD.item(), errG.item(), D_x, D_G_z1, D_G_z2))
-            print('Acc = ', acc)
+    # Output training stats
+    if epoch % print_every == 0 :
+        print('[%d/%d]\tD_real = %.4f\t D_fake= %.4f\tD_cost= %.4f\tG_cost= %.4f\tWasserstein_D= %.4f'
+                  % (epoch, num_epochs, D_real, D_fake, D_cost, G_cost,Wasserstein_D))
+        print('Acc = ', acc)
 
-        # Save Losses for plotting later
-        G_losses.append(errG.item())
-        D_losses.append(errD.item())
+    # Save Losses for plotting later
+    G_losses.append(G_cost.item())
+    D_losses.append(D_cost.item())
 
-        # Check how the generator is doing by saving G's output on fixed_noise
-        if (iters % store_every == 0) or ((epoch == num_epochs-1) and (i == len(dataloader)-1)):
-            with torch.no_grad():
-                # Create batch of latent vectors that we will use to visualize
-                #  the progression of the generator
-                for cond in test_loader:
-                    cond = cond.to(device)
-                    fixed_noise = torch.randn(len(cond), nz, 1, 1, device=device)
-                    fake = netG(fixed_noise,cond.detach()).detach().cpu()
-                    break
-            img_list.append(vutils.make_grid(fake, padding=2, normalize=True))
-            acc_list.append(acc)
+    # Check how the generator is doing by saving G's output on fixed_noise
+    if (iters % store_every == 0) or (epoch == num_epochs-1):
+        with torch.no_grad():
+            # Create batch of latent vectors that we will use to visualize
+            #  the progression of the generator
+            for cond in test_loader:
+                cond = cond.to(device)
+                fixed_noise = torch.randn(len(cond), nz, 1, 1, device=device)
+                fake = netG(fixed_noise,cond.detach()).detach().cpu()
+                break
+        img_list.append(vutils.make_grid(fake, padding=2, normalize=True))
+        acc_list.append(acc)
             
-            if ((epoch == num_epochs-1) and (i == len(dataloader)-1)):
-                torch.save(netG, os.path.join(ckp_path_G, 'iter_'+str(iter)+'_'+time_stamp))
-                torch.save(netD, os.path.join(ckp_path_D, 'iter_'+str(iter)+'_'+time_stamp))
+        if (epoch == num_epochs-1):
+            torch.save(netG, os.path.join(ckp_path_G, 'iter_'+str(iters)+'_'+time_stamp))
+            torch.save(netD, os.path.join(ckp_path_D, 'iter_'+str(iters)+'_'+time_stamp))
 
-        iters += 1
+    iters += 1
 # -
 
 plt.figure(figsize=(10,5))
@@ -278,3 +326,5 @@ plt.savefig('results/'+str(time_stamp))
 
 torch.save(img_list,'lists/img_list_'+str(time_stamp))
 torch.save(acc_list,'lists/acc_list_'+str(time_stamp))
+
+
