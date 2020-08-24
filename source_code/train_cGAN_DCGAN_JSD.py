@@ -35,11 +35,11 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 # Checkpoint path
 ckp_path_G = './models/cGAN_DCGAN_JSD/netG/'
 ckp_path_D = './models/cGAN_DCGAN_JSD/netD/'
-time_stamp = '0823_1958'
+time_stamp = '0824_1122'
 
 # Print & store settings
 print_every = 50
-store_every = 300
+store_every = 10
 # # +
 # Number of training epochs
 num_epochs = 300
@@ -258,8 +258,7 @@ for epoch in range(num_epochs):
                     break
             img_list.append(vutils.make_grid(fake, padding=2, normalize=True))
             
-            if (iters % (store_every*10) == 0):
-            
+            if ((epoch == num_epochs-1) and (i == len(dataloader)-1)):
                 torch.save(netG, os.path.join(ckp_path_G, 'iter_'+str(iter)+'_'+time_stamp))
                 torch.save(netD, os.path.join(ckp_path_D, 'iter_'+str(iter)+'_'+time_stamp))
 
@@ -273,5 +272,4 @@ plt.plot(D_losses,label="D")
 plt.xlabel("iterations")
 plt.ylabel("Loss")
 plt.legend()
-plt.show()
-
+plt.savefig(time_stamp)
