@@ -23,8 +23,8 @@ from dataloader import ICLEVRLoader
 from evaluator import evaluation_model, test
 
 # Set random seed for reproducibility
-manualSeed = 999
-#manualSeed = random.randint(1, 10000) # use if you want new results
+#manualSeed = 999
+manualSeed = random.randint(1, 10000) # use if you want new results
 print("Random Seed: ", manualSeed)
 random.seed(manualSeed)
 torch.manual_seed(manualSeed)
@@ -35,7 +35,7 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 # Checkpoint path
 ckp_path_G = './models/cGAN_DCGAN_JSD/netG/'
 ckp_path_D = './models/cGAN_DCGAN_JSD/netD/'
-time_stamp = '0824_1226'
+time_stamp = '0826_1026'
 
 # Print & store settings
 print_every = 50
@@ -75,7 +75,7 @@ ndf = 64
 # -
 
 # Learning rate for optimizers
-lr = 0.0002
+lr = 0.0001
 
 # Beta1 hyperparam for Adam optimizers
 beta1 = 0.5
@@ -175,7 +175,7 @@ for epoch in range(num_epochs):
         # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
         ###########################
         ## Train with all-real batch
-        netD.zero_grad()
+        optimizerD.zero_grad()
         
         # Format batch
         real_cpu = data[0].to(device)
@@ -212,7 +212,7 @@ for epoch in range(num_epochs):
         ############################
         # (2) Update G network: maximize log(D(G(z)))
         ###########################
-        netG.zero_grad()
+        optimizerG.zero_grad()
         label.fill_(real_label)  # fake labels are real for generator cost
         # Since we just updated D, perform another forward pass of all-fake batch through D
         output = netD(fake,cond.detach()).view(-1)

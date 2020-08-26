@@ -132,3 +132,5 @@ dmypy.json
 lab5_dataset/**
 *.pth
 source_code/models
+source_code/lists
+source_code/results

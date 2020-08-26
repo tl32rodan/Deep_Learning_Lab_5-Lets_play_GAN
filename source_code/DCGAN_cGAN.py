@@ -91,7 +91,9 @@ class Discriminator(nn.Module):
             # state size. (ndf*4) x 8 x 8
             nn.Conv2d(self.ndf * 4, self.ndf * 8, 4, 2, 1, bias=False),
             nn.BatchNorm2d(self.ndf * 8),
-            nn.LeakyReLU(0.2, inplace=True),
+            nn.LeakyReLU(0.2, inplace=True)
+        )
+        self.decision_layer = nn.Sequential(
             # state size. (ndf*8) x 4 x 4
             nn.Conv2d(self.ndf * 8, 1, 4, 1, 0, bias=False),
             nn.Sigmoid()
@@ -102,9 +104,15 @@ class Discriminator(nn.Module):
             nn.ReLU()
         )
 
-    def forward(self, input, cond):
+    def forward(self, input, cond, get_feature = False):
         cond = self.extend_cond(cond).view(-1,1,64,64)
         #print('input.shape = ',input.shape)
         #print('cond.shape = ',cond.shape)
         x = torch.cat((input,cond),1)
-        return self.main(x)
+        x = self.main(x)
+        if get_feature:
+            last_f = x
+            x = self.decision_layer(x)
+            return x, last_f
+        else:
+            return self.decision_layer(x)

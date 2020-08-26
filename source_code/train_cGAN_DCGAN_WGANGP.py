@@ -25,8 +25,8 @@ from dataloader import ICLEVRLoader
 from evaluator import evaluation_model, test
 
 # Set random seed for reproducibility
-manualSeed = 999
-#manualSeed = random.randint(1, 10000) # use if you want new results
+#manualSeed = 1998
+manualSeed = random.randint(1, 10000) # use if you want new results
 print("Random Seed: ", manualSeed)
 random.seed(manualSeed)
 torch.manual_seed(manualSeed)
@@ -37,14 +37,14 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 # Checkpoint path
 ckp_path_G = './models/cGAN_DCGAN_WGANGP/netG/'
 ckp_path_D = './models/cGAN_DCGAN_WGANGP/netD/'
-time_stamp = '0824_1420'
+time_stamp = '0825_1420'
 
 # Print & store settings
-print_every = 100
+print_every = 10
 store_every = 10
 # # +
 # Number of training epochs
-num_epochs = 10000
+num_epochs = 5000
 
 # Root directory for dataset
 dataroot = '../lab5_dataset/iclevr/'
@@ -67,8 +67,7 @@ image_size = 64
 nc = 3
 
 # Size of z latent vector (i.e. size of generator input)
-# Plus classes number for cGAN
-nz = 100
+nz = 128
 
 # Size of feature maps in generator
 ngf = 64
@@ -77,7 +76,7 @@ ndf = 64
 # -
 
 # Learning rate for optimizers
-lr = 0.0002
+lr = 0.0001
 
 # Beta1 hyperparam for Adam optimizers
 beta1 = 0.5
@@ -86,10 +85,10 @@ beta1 = 0.5
 ngpu = 1
 
 # For WGAN and WGAN-GP, number of critic iters per gen iter
-CRITIC_ITERS = 5 
+CRITIC_ITERS = 3
 
 # Gradient penalty lambda hyperparameter
-LAMBDA = 10 
+LAMBDA = 10
 
 # Size of test set
 test_size = 32
@@ -179,16 +178,10 @@ def calc_gradient_penalty(netD, real_data, fake_data, cond):
     return gradient_penalty
 
 
-# +
 inf_loader = inf_img(dataloader)
-# Initialize BCELoss function
-one = one = torch.tensor(1, dtype=torch.float).to(device)
-mone = one * -1
-
 # Setup Adam optimizers for both G and D
 optimizerD = optim.Adam(netD.parameters(), lr=lr, betas=(beta1, 0.999))
 optimizerG = optim.Adam(netG.parameters(), lr=lr, betas=(beta1, 0.999))
-# -
 
 # ## Training Loop
 
@@ -218,7 +211,7 @@ for epoch in range(num_epochs):
         # (1) Update D network
         ###########################
         ## Train with all-real batch
-        netD.zero_grad()
+        optimizerD.zero_grad()
         
         # Format batch
         real = Variable(data[0]).to(device)
@@ -226,8 +219,6 @@ for epoch in range(num_epochs):
         # Forward pass real batch with condition through D
         D_real = netD(real,cond.detach())
         D_real = D_real.mean()
-        # Calculate gradients for D in backward pass
-        D_real.backward(mone)
         
 
         ## Train with all-fake batch
@@ -238,19 +229,17 @@ for epoch in range(num_epochs):
         fake = netG(noise,cond.detach())
         
         # Classify all fake batch with D
-        D_fake = netD(fake,cond.detach()).view(-1)
+        D_fake = netD(fake,cond.detach())
         # Calculate D's loss on the all-fake batch
         D_fake = D_fake.mean()
-        # Calculate the gradients for this batch
-        D_fake.backward(one)
         
         
         # train with gradient penalty
         gradient_penalty = calc_gradient_penalty(netD, real.data, fake.data, cond)
-        gradient_penalty.backward()
         
         # Add the gradients from the all-real and all-fake batches
         D_cost = D_fake - D_real + gradient_penalty
+        D_cost.backward()
         Wasserstein_D = D_real - D_fake
 
         # Update D
@@ -261,16 +250,16 @@ for epoch in range(num_epochs):
     ###########################
     for p in netD.parameters(): 
         p.requires_grad = False # to avoid computation
-    netG.zero_grad()
+    optimizerG.zero_grad()
     # Since we just updated D, perform another forward pass of all-fake batch through D
     noise = torch.randn(b_size, nz, 1, 1, device=device)
     # Generate fake image batch with G
     fake = netG(noise,cond.detach())
     output = netD(fake,cond.detach()).view(-1)
     output = output.mean()
-    output.backward(mone)
         
     G_cost = -output
+    G_cost.backward()
     optimizerG.step()
 
     # Store if the performance is good
@@ -288,7 +277,7 @@ for epoch in range(num_epochs):
     # Output training stats
     if epoch % print_every == 0 :
         print('[%d/%d]\tD_real = %.4f\t D_fake= %.4f\tD_cost= %.4f\tG_cost= %.4f\tWasserstein_D= %.4f'
-                  % (epoch, num_epochs, D_real, D_fake, D_cost, G_cost,Wasserstein_D))
+                  % (epoch, num_epochs, D_real.item(), D_fake.item(), D_cost.item(), G_cost.item(),Wasserstein_D.item()))
         print('Acc = ', acc)
 
     # Save Losses for plotting later
