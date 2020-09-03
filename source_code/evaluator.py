@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 import torchvision.models as models
+from torchvision.utils import save_image, make_grid
+from torch.utils.tensorboard import SummaryWriter
 
 '''===============================================================
 1. Title:     
@@ -73,12 +75,20 @@ def test(netG, test_loader, nz=100):
     
     avg_acc = 0.
     n = 0
+    i = 0
+    log_writer = SummaryWriter()
     with torch.no_grad():
         for cond in test_loader:
             fixed_noise = torch.randn(len(cond), nz, 1, 1, device=device)
             fake = netG(fixed_noise,cond.to(device))
             acc = eval_model.eval(images=fake.to(device), labels=cond.to(device))
             avg_acc += acc*len(cond)
+            
+            grid = make_grid(fake, nrow=8, normalize=True)
+            log_writer.add_image('imgs',grid,i)
+            
             n += len(cond)
+            i += 1
+    log_writer.close()
     avg_acc = avg_acc/n
     return avg_acc
